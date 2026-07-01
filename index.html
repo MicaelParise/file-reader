@@ -1,24 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-	<title>JavaScript FileReader </title>
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
-	<link rel="stylesheet" href="style.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Leitor de Arquivos</title>
+
+	<script>
+		(function () {
+			var temaSalvo = localStorage.getItem('tema');
+			var prefereEscuro = window.matchMedia('(prefers-color-scheme: dark)').matches;
+			var escuro = temaSalvo ? temaSalvo === 'escuro' : prefereEscuro;
+			if (escuro) document.documentElement.classList.add('dark');
+		})();
+	</script>
+	<style>
+		/* Cor de fundo aplicada antes do Tailwind (via CDN) carregar e gerar seu CSS, evitando o flash branco no reload. */
+		html { background-color: #f8fafc; }
+		html.dark { background-color: #0f172a; }
+	</style>
+
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = { darkMode: 'class' };
+	</script>
+
+	<link rel="stylesheet" href="css/styles.css">
+	<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
-<body>
-	<div class="container">
-		<h1>File Reader</h1>
-		<p>Select a text file to read:</p>
-		<label for="file-input" class="custom-file-upload">
-			<input type="file" id="file-input" accept=".txt,.md,.html,.css,.js" />
-			<i class="fas fa-cloud-upload-alt"></i> Choose File
-		</label>
-    <div class="file-info">
-      <p>Selected file:</p>
-      <div id="file-name">No file selected!</div>
-    </div>
-		<pre id="file-content"></pre>
+<body class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 js-transicao">
+
+	<header class="fixed inset-x-0 top-0 z-40 border-b-2 border-slate-200/70 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md">
+		<div class="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 md:px-8">
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-8 w-8 shrink-0 text-indigo-600 dark:text-indigo-400">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M9 8h1M6.75 3h6.379a1.5 1.5 0 0 1 1.06.44l3.371 3.37a1.5 1.5 0 0 1 .44 1.061V19.5A1.5 1.5 0 0 1 16.5 21h-9.75A1.5 1.5 0 0 1 5.25 19.5v-15A1.5 1.5 0 0 1 6.75 3Z" />
+			</svg>
+			<div>
+				<h1 class="text-lg font-bold leading-tight">Leitor de Arquivos</h1>
+				<p class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">Visualize o conteúdo de arquivos de texto direto no navegador</p>
+			</div>
+		</div>
+	</header>
+
+	<main x-data="leitorArquivos()" class="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 pb-16 pt-28 md:px-8">
+		<div class="grid gap-6 md:grid-cols-2 md:gap-8 md:items-start">
+
+			<section class="space-y-5">
+				<div
+					class="group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center js-transicao"
+					:class="arrastando
+						? 'border-indigo-500 bg-indigo-50 dark:bg-slate-700/60'
+						: 'border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/50 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-indigo-500'"
+					@click="$refs.entrada.click()"
+					@dragover.prevent="arrastando = true"
+					@dragleave.prevent="arrastando = false"
+					@drop.prevent="soltarArquivo($event)"
+				>
+					<input x-ref="entrada" type="file" class="hidden" accept=".txt,.md,.html,.css,.js" @change="selecionarArquivo($event)">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-10 w-10 text-indigo-500 dark:text-indigo-400">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 8.25 12 3.75m0 0L7.5 8.25M12 3.75v13.5" />
+					</svg>
+					<div>
+						<p class="font-semibold">Clique ou arraste um arquivo aqui</p>
+						<p class="text-sm text-slate-500 dark:text-slate-400">.txt, .md, .html, .css ou .js</p>
+					</div>
+				</div>
+
+				<div class="flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-md dark:border-slate-700 dark:bg-slate-800">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="h-9 w-9 shrink-0 text-slate-400 dark:text-slate-500">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+					</svg>
+					<div class="min-w-0 flex-1">
+						<p class="text-sm text-slate-500 dark:text-slate-400">Arquivo selecionado</p>
+						<p class="truncate font-semibold" x-text="nomeArquivo || 'Nenhum arquivo selecionado'"></p>
+					</div>
+					<button
+						x-show="arquivoSelecionado" x-cloak
+						@click="limpar()"
+						class="shrink-0 rounded-xl border-2 border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:border-red-300 hover:text-red-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-red-500 dark:hover:text-red-400 js-transicao"
+					>
+						Limpar
+					</button>
+				</div>
+
+				<div
+					x-show="erro" x-cloak x-transition
+					class="rounded-2xl border-2 border-red-300 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300"
+				>
+					<span x-text="erro"></span>
+				</div>
+			</section>
+
+			<section class="flex h-full flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 md:sticky md:top-28">
+				<div class="flex items-center gap-2 border-b-2 border-slate-200 px-5 py-3 dark:border-slate-700">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="h-5 w-5 text-slate-400 dark:text-slate-500">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
+					</svg>
+					<span class="font-semibold">Conteúdo</span>
+				</div>
+				<div class="max-h-[65vh] overflow-auto p-5">
+					<template x-if="!arquivoSelecionado">
+						<p class="text-sm text-slate-400 dark:text-slate-500">O conteúdo do arquivo aparecerá aqui.</p>
+					</template>
+					<pre x-show="arquivoSelecionado" x-cloak class="whitespace-pre-wrap break-words font-mono text-sm text-slate-700 dark:text-slate-200" x-text="conteudo"></pre>
+				</div>
+			</section>
+
+		</div>
+	</main>
+
+	<div x-data="alternadorTema()" x-cloak class="fixed bottom-5 right-5 z-50">
+		<button
+			@click="alternar()"
+			aria-label="Alternar tema claro ou escuro"
+			class="flex h-12 w-12 items-center justify-center rounded-full border-2 border-slate-200/70 bg-white/70 shadow-lg backdrop-blur-md transition-transform hover:scale-105 dark:border-slate-600/70 dark:bg-slate-800/60"
+		>
+			<svg x-show="!escuro" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 text-slate-600">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.598.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
+			</svg>
+			<svg x-show="escuro" x-cloak xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 text-amber-300">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+			</svg>
+		</button>
 	</div>
-	<script src="script.js"></script>
+
+	<script src="js/app.js"></script>
 </body>
 </html>
